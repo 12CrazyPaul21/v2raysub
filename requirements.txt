@@ -1,0 +1,7 @@
+requests
+click
+questionary
+psutil
+tqdm
+pywin32; sys_platform == 'win32'
+pyinstaller; sys_platform == 'win32'
