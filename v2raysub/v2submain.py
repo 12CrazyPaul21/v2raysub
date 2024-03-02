@@ -893,6 +893,8 @@ def install_group(proxy: str):
     if proxy:
         util.config_request_proxy(proxy)
 
+    os.makedirs(App.app_dir, exist_ok=True)
+
 
 @install_group.command('v2ray', help=f'install v2ray{"(need root)" if platform.system() == "Linux" else ""}')
 def install_v2ray():
