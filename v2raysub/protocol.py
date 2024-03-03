@@ -189,7 +189,7 @@ def generate_trojan_stream_settings(options) -> object:
     allow_stream_type = ['tcp', 'kcp', 'ws', 'h2', 'http', 'quic', 'grpc']
     allow_security_type = ['tls', 'reality']
     stream_type = options.get('type')
-    security_type = options.get('security')
+    security_type = options.get('security', 'tls')
 
     if stream_type in allow_stream_type:
         settings['network'] = stream_type
@@ -261,7 +261,7 @@ def generate_trojan_stream_settings(options) -> object:
 
     if security_type == 'tls':
         settings['tlsSettings'] = {
-            'allowInsecure': True,
+            'allowInsecure': options.get('allowInsecure', '1') == '1',
             'show': False,
             'serverName': options.get('sni', ''),
             'alpn': unquote(options['alpn']).split(',') if ('alpn' in options) else [],
