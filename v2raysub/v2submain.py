@@ -1286,6 +1286,23 @@ def stop_node_command():
     sys.exit(App.stop_v2ray())
 
 
+@node_group.command('restart', help='restart v2ray')
+def restart_node_command():
+    if util.check_is_running(App.pid_path, 'v2ray'):
+        App.stop_v2ray(True)
+
+    if util.find_bin('v2ray') == '':
+        print('please install v2ray and add the path to the PATH environment first')
+        print('see https://www.v2fly.org/guide/install.html or try to execute: v2sub install v2ray')
+        sys.exit(1)
+
+    if not os.path.exists(App.node_config_path):
+        logging.error('please select a node first: v2sub node select')
+        sys.exit(1)
+
+    sys.exit(App.run_v2ray())
+
+
 @node_group.command('status', help='check v2ray running status')
 @AppDecorator.base_config_exists()
 @AppDecorator.open_subscribe_config()
@@ -1419,6 +1436,23 @@ def start_service_command():
 def stop_service_command():
     App.check_proxy_need_disable('service')
     service.stop_service(App.v2sub_service_name)
+    sys.exit(0)
+
+
+@service_group.command('restart', help='restart v2sub service')
+@AppDecorator.v2sub_service_installed()
+def restart_service_command():
+    if App.system == 'Windows':
+        util.runas_admin([
+            'sc.exe stop v2sub',
+            'timeout /t 2',
+            'sc.exe start v2sub'
+        ])
+    else:
+        service.stop_service(App.v2sub_service_name)
+        time.sleep(0.5)
+        service.start_service(App.v2sub_service_name)
+
     sys.exit(0)
 
 
