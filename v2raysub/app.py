@@ -130,6 +130,36 @@ class AppPrompt:
         return {'group': sub, 'name': name}, 0
 
     @staticmethod
+    def select_run_node():
+        node_type = ['base config']
+        anonymous_nodes = App.subscribe_config.anonymous_names()
+        groups = App.subscribe_config.groups()
+
+        if len(anonymous_nodes) != 0:
+            node_type.append('anonymous')
+        if len(groups) != 0:
+            node_type.append('groups')
+
+        node_type = Input.select_with_cancel('choose config type: ', node_type)
+        if not node_type:
+            return None, 1
+
+        if node_type == 'base config':
+            return {'group': '', 'name': ''}, 0
+
+        if node_type == 'anonymous':
+            sub = ''
+            name = Input.select_with_cancel('choose anonymous node: ', anonymous_nodes)
+        else:
+            sub = Input.select_with_cancel('choose group list: ', groups)
+            name = AppPrompt.select_subscribe_group_item(sub)
+
+        if not name:
+            return None, 1
+
+        return {'group': sub, 'name': name}, 0
+
+    @staticmethod
     def select_config_file():
         config_list = {
             'base config': App.base_config_path
@@ -301,12 +331,15 @@ class AppPrompt:
             print('sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on')
 
     @staticmethod
-    def show_subscribe_node_info(group, name, node_info):
-        print(f'  node name: {name}')
-        if group:
-            print(f'  subscribe group name: {group}')
-            print(f'  subscribe group url: {App.subscribe_config.get_group_url(group)}')
-        print(f'  node info: {node_info}')
+    def show_node_info(group, name, node_info):
+        if group or name:
+            print(f'  node name: {name}')
+            if group:
+                print(f'  subscribe group name: {group}')
+                print(f'  subscribe group url: {App.subscribe_config.get_group_url(group)}')
+            print(f'  node info: {node_info}')
+        else:
+            print('  use base config')
 
     @staticmethod
     def show_all_proxychains_alias(proxychains_bin):
@@ -567,17 +600,13 @@ class App:
         curr_selected = App.subscribe_config.selected(service_mode)
         if curr_selected:
             print('current select node:')
-            AppPrompt.show_subscribe_node_info(
+            AppPrompt.show_node_info(
                 curr_selected['group_name'],
                 curr_selected['name'],
                 curr_selected["node"]
             )
 
-        if App.subscribe_config.is_empty():
-            print('subscribe list is empty')
-            return 1
-
-        result, err = AppPrompt.select_subscribe_item(entire_group=False)
+        result, err = AppPrompt.select_run_node()
         if err != 0:
             return err
 
@@ -586,6 +615,22 @@ class App:
             config_path = App.node_service_config_path
         else:
             config_path = App.node_config_path
+
+        if result['group'] == '' and result['name'] == '':
+            try:
+                App.subscribe_config.select(result['group'], result['name'], service_mode)
+                config.generate_node_config(
+                    config_path,
+                    App.base_config_path,
+                    None,
+                    service_mode,
+                    False
+                )
+            except BaseException as e:
+                logging.error(f'reuse base node failed: {e}')
+                sys.exit(1)
+
+            return 0
 
         reuse = False
         if os.path.exists(config_path):
@@ -604,7 +649,7 @@ class App:
                 reuse
             )
         except BaseException as e:
-            logging.error(f'select node failed: {e}')
+            logging.error(f'change node failed: {e}')
             sys.exit(1)
 
         return 0
@@ -710,7 +755,7 @@ class App:
         curr_selected = App.subscribe_config.selected(service_mode)
         if curr_selected:
             print('current select node:')
-            AppPrompt.show_subscribe_node_info(
+            AppPrompt.show_node_info(
                 curr_selected['group_name'],
                 curr_selected['name'],
                 curr_selected["node"]

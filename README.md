@@ -92,9 +92,13 @@ v2sub subscribe --proxy <server:port> add <url>
 ```bash
 # anonymous内是独立节点列表，groups则是分组列表
 choose subscribe type:
- » anonymous
+ » base config
+   anonymous
    groups
    <Cancel>
+# base config 指的是直接复用默认的base_config.json里面的设置，默认没有配置带proxy tag的outbound
+# anonymous 指的是直接以类似 ss://...，这种方式添加的非分组的订阅链接
+# groups 指的是订阅分组
 ```
 
 **notes: **在服务启动之后也可以重新执行 `select` 来切换节点

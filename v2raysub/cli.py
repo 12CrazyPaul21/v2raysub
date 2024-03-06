@@ -314,7 +314,7 @@ def show_subscribe_command():
     if not node:
         sys.exit(1)
 
-    AppPrompt.show_subscribe_node_info(result['group'], result['name'], node)
+    AppPrompt.show_node_info(result['group'], result['name'], node)
 
     sys.exit(0)
 

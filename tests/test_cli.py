@@ -274,7 +274,7 @@ class TestCLI(unittest.TestCase):
         """ node select and config """
 
         with create_pipe_input() as pipe_input:
-            pipe_input.send_text('\n\n')
+            pipe_input.send_text('j\n\n')
             with create_app_session(input=pipe_input, output=DummyOutput()):
                 result = self.runner.invoke(v2submain.cli, ['node', 'select'], env=self.env)
                 self.assertEqual(result.exit_code, 0)

@@ -246,12 +246,13 @@ class SubscribeConfig:
         return self._obj[key]
 
     def select(self, group_name, node_name, service_mode=False) -> object:
-        if not group_name:
-            group_name = ''
-
-        node = self.get_node(group_name, node_name)
-        if not node:
-            raise ValueError('node not found')
+        if group_name or node_name:
+            node = self.get_node(group_name, node_name)
+            if not node:
+                raise ValueError('node not found')
+        else:
+            # base config
+            node = None
 
         self._obj['service_mode_selected' if service_mode else 'selected'] = {
             'name': node_name,
@@ -391,13 +392,15 @@ def generate_v2ray_base_config(app_dir, config_path, log_level=None, socks_port=
     return result
 
 
-def generate_new_node_config(node_config_path, base_config_path, outbound_config, service_mode):
+def reuse_base_config(node_config_path, base_config_path, outbound_config, service_mode):
     with open(base_config_path, 'r', encoding='utf-8') as file:
         config = json.loads(file.read())
 
     if 'outbounds' not in config:
         config['outbounds'] = []
-    config['outbounds'].insert(0, outbound_config)
+
+    if outbound_config:
+        config['outbounds'].insert(0, outbound_config)
 
     for inbound in config.get('inbounds', []):
         if service_mode:
@@ -432,6 +435,9 @@ def reuse_previous_node_config(node_config_path, outbound_config):
     with open(node_config_path, 'r', encoding='utf-8') as file:
         config = json.loads(file.read())
 
+    if not outbound_config:
+        return config
+
     if 'outbounds' not in config:
         config['outbounds'] = [outbound_config]
         return config
@@ -445,7 +451,7 @@ def reuse_previous_node_config(node_config_path, outbound_config):
 
 def generate_node_config(node_config_path, base_config_path, outbound_config, service_mode, reuse):
     if not reuse or not os.path.exists(node_config_path):
-        config = generate_new_node_config(node_config_path, base_config_path, outbound_config, service_mode)
+        config = reuse_base_config(node_config_path, base_config_path, outbound_config, service_mode)
     else:
         config = reuse_previous_node_config(node_config_path, outbound_config)
 
