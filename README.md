@@ -1,4 +1,4 @@
-[![PyPI - Version](https://img.shields.io/pypi/v/v2raysub)](https://pypi.org/project/v2raysub/) [![Build Status](https://github.com/12CrazyPaul21/v2raysub/actions/workflows/build-and-test-v2sub.yml/badge.svg)](https://github.com/12CrazyPaul21/v2raysub/actions) [![MIT/Apache-2 licensed](https://img.shields.io/crates/l/lopxy.svg)](./LICENSE)
+[![PyPI - Version](https://img.shields.io/pypi/v/v2raysub)](https://pypi.org/project/v2raysub/) ![PyPI - Downloads](https://img.shields.io/pypi/dm/v2raysub) [![Build Status](https://github.com/12CrazyPaul21/v2raysub/actions/workflows/build-and-test-v2sub.yml/badge.svg)](https://github.com/12CrazyPaul21/v2raysub/actions) [![MIT/Apache-2 licensed](https://img.shields.io/crates/l/lopxy.svg)](./LICENSE)
 
 # v2raysub
 

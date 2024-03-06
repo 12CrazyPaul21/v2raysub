@@ -4,4 +4,5 @@ extend-ignore =
     W292
 per-file-ignores =
     tests/test_protocol_parse.py:E501
+    tests/test_cli.py:E501
 max-line-length = 120

@@ -2,5 +2,6 @@
 /dist/
 /*.egg-info/
 **/__pycache__/
+**/fake_home*/
 **/.pytest_cache/
 *.pyc

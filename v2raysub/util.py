@@ -11,7 +11,6 @@ import copy
 import subprocess
 import psutil
 import platform
-import ctypes
 import requests
 import tqdm
 import zipfile
@@ -94,11 +93,6 @@ class Input:
         return questionary.text(message, qmark='', validate=lambda s: len(s) != 0).ask()
 
 
-def request_get(url) -> requests.Response:
-    global REQUEST_PROXIES
-    return requests.get(url, timeout=5, proxies=REQUEST_PROXIES)
-
-
 def config_request_proxy(proxy_server):
     global REQUEST_PROXIES
 
@@ -109,6 +103,11 @@ def config_request_proxy(proxy_server):
 
     os.environ['http_proxy'] = f'http://{proxy_server}'
     os.environ['https_proxy'] = f'http://{proxy_server}'
+
+
+def request_get(url) -> requests.Response:
+    global REQUEST_PROXIES
+    return requests.get(url, timeout=5, proxies=REQUEST_PROXIES)
 
 
 def download(asset_url, asset_path, chunk_size=512):
@@ -190,6 +189,24 @@ def parse_query_string(query: str) -> object:
     }
 
 
+def read_line(file_path, default='') -> str:
+    if not os.path.exists(file_path):
+        return ''
+
+    content = default
+
+    try:
+        with open(file_path, 'r') as file:
+            content = file.readline()
+        if len(content) != 0:
+            content = content.lstrip().rstrip()
+    except Exception as e:
+        content = default
+        logging.debug(f'read file failed: {e}')
+
+    return content
+
+
 def is_64bit_os():
     return platform.architecture()[0] == '64bit'
 
@@ -221,24 +238,6 @@ def install_package(pm, optional):
             if os.system(f'sudo {pm} install {name}') == 0:
                 return True
     return False
-
-
-def call_editor(file_path) -> int:
-    result = 0
-
-    try:
-        if sys.platform == 'win32':
-            subprocess.Popen(['notepad.exe', file_path])
-        else:
-            for editor in ['nano', 'vim', 'vi']:
-                if find_bin(editor):
-                    os.system(f'{editor} {file_path}')
-                    break
-    except Exception as e:
-        result = 1
-        logging.error(f'call_editor failed: {e}')
-
-    return result
 
 
 def get_program_name_with_pid(pid) -> str:
@@ -273,6 +272,28 @@ def check_is_running(pid_path: str, program_name: str) -> bool:
     return True
 
 
+def call_editor(file_path) -> int:
+    result = 0
+
+    try:
+        if sys.platform == 'win32':
+            subprocess.Popen(['notepad.exe', file_path])
+        else:
+            valid_editor = None
+            for editor in ['nano', 'vim', 'vi']:
+                if find_bin(editor):
+                    valid_editor = editor
+                    break
+            if not valid_editor:
+                raise RuntimeError('editor not found')
+            os.system(f'{valid_editor} {file_path}')
+    except Exception as e:
+        result = 1
+        logging.error(f'call editor failed: {e}')
+
+    return result
+
+
 def run_cmds(cmds) -> int:
     for cmd in cmds:
         print(cmd)
@@ -282,22 +303,62 @@ def run_cmds(cmds) -> int:
     return 0
 
 
-def read_line(file_path, default='') -> str:
-    if not os.path.exists(file_path):
-        return ''
+def runas_daemon(args, pid_path):
+    platform_system = platform.system()
 
-    content = default
+    if platform_system == 'Windows':
+        import win32process
+        import win32con
+
+        flag = win32process.CREATE_NEW_CONSOLE
+        si = win32process.STARTUPINFO()
+
+        si.dwFlags = win32process.STARTF_USESHOWWINDOW
+        si.wShowWindow = win32con.SW_HIDE
+
+        process_info = win32process.CreateProcess(None, ' '.join(args), None, None, 0, flag, None, None, si)
+        os.system(f'echo {process_info[2]} > {pid_path}')
+    elif platform_system == 'Linux':
+        import multiprocessing
+
+        def _daemon():
+            process = subprocess.Popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            os.system(f'echo {process.pid} > {pid_path}')
+
+        process = multiprocessing.Process(target=_daemon, daemon=True)
+        process.start()
+        process.join()
+    elif platform_system == 'Darwin':
+        process = subprocess.Popen(
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        os.system(f'echo {process.pid} > {pid_path}')
+    else:
+        raise SystemError(f'{platform_system} unsupported')
+
+
+def kill_daemon(pid_path) -> int:
+    if not os.path.exists(pid_path):
+        return 1
 
     try:
-        with open(file_path, 'r') as file:
-            content = file.readline()
-        if len(content) != 0:
-            content = content.lstrip().rstrip()
+        process = psutil.Process(int(read_line(pid_path)))
+        process.terminate()
+        os.remove(pid_path)
+        retval = 0
     except Exception as e:
-        content = default
-        logging.debug(f'read file failed: {e}')
+        retval = 1
+        logging.error(f'kill daemon failed: {e}')
 
-    return content
+    return retval
 
 
 if platform.system() == 'Windows':
@@ -332,6 +393,8 @@ if platform.system() == 'Windows':
     def runas_admin(args: Union[str | List[str]]):
         if isinstance(args, list):
             args = ' && '.join(args)
+
+        import ctypes
 
         if ctypes.windll.shell32.IsUserAnAdmin():
             os.system(args)
@@ -402,7 +465,7 @@ else:
             '/ksh': '~/.kshrc'
         }.items():
             if os.environ['SHELL'].endswith(shell):
-                return profile
+                return os.path.expanduser(profile)
 
         raise SystemError('unknown shell type')
 
@@ -443,31 +506,11 @@ if platform.system() == 'Darwin':
         return interfaces
 
 
-def file_exists(obj, var, tips=''):
+def make_decorator(fn, *fnargs):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            path = getattr(obj, var, '')
-            if not os.path.exists(path):
-                logging.error(f'{path} not exists')
-                if len(tips) != 0:
-                    print(tips)
-                sys.exit(1)
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def file_not_exists(obj, var, tips=''):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            path = getattr(obj, var, '')
-            if os.path.exists(path):
-                logging.error(f'{path} is already exists')
-                if len(tips) != 0:
-                    print(tips)
-                sys.exit(1)
+            fn(*fnargs)
             return func(*args, **kwargs)
         return wrapper
     return decorator
