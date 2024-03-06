@@ -391,7 +391,7 @@ def generate_v2ray_base_config(app_dir, config_path, log_level=None, socks_port=
     return result
 
 
-def generate_node_config(node_config_path, base_config_path, outbound_config, service_mode):
+def generate_new_node_config(node_config_path, base_config_path, outbound_config, service_mode):
     with open(base_config_path, 'r', encoding='utf-8') as file:
         config = json.loads(file.read())
 
@@ -424,6 +424,30 @@ def generate_node_config(node_config_path, base_config_path, outbound_config, se
             'error': error_log,
             'loglevel': 'warning'
         }
+
+    return config
+
+
+def reuse_previous_node_config(node_config_path, outbound_config):
+    with open(node_config_path, 'r', encoding='utf-8') as file:
+        config = json.loads(file.read())
+
+    if 'outbounds' not in config:
+        config['outbounds'] = [outbound_config]
+        return config
+
+    outbounds = list(filter(lambda outbound: outbound['tag'] != outbound_config['tag'], config['outbounds']))
+    outbounds.insert(0, outbound_config)
+    config['outbounds'] = outbounds
+
+    return config
+
+
+def generate_node_config(node_config_path, base_config_path, outbound_config, service_mode, reuse):
+    if not reuse or not os.path.exists(node_config_path):
+        config = generate_new_node_config(node_config_path, base_config_path, outbound_config, service_mode)
+    else:
+        config = reuse_previous_node_config(node_config_path, outbound_config)
 
     with open(node_config_path, 'w', encoding='utf-8') as file:
         file.write(json.dumps(config, indent=2, ensure_ascii=False))

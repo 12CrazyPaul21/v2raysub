@@ -541,19 +541,27 @@ class App:
         if err != 0:
             return err
 
-        try:
-            if service_mode:
-                os.makedirs(App.service_dir, exist_ok=True)
-                config_path = App.node_service_config_path
-            else:
-                config_path = App.node_config_path
+        if service_mode:
+            os.makedirs(App.service_dir, exist_ok=True)
+            config_path = App.node_service_config_path
+        else:
+            config_path = App.node_config_path
 
+        reuse = False
+        if os.path.exists(config_path):
+            reuse = Input.select('resue previous node settings?', ['Yes', 'No'], 'Yes')
+            if not reuse:
+                return 1
+            reuse = (reuse == 'Yes')
+
+        try:
             node = App.subscribe_config.select(result['group'], result['name'], service_mode)
             config.generate_node_config(
                 config_path,
                 App.base_config_path,
                 protocol.generate_v2ray_outbound(node),
-                service_mode
+                service_mode,
+                reuse
             )
         except BaseException as e:
             logging.error(f'select node failed: {e}')
