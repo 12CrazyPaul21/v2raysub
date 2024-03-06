@@ -68,6 +68,8 @@ v2sub subscribe update --all
 # 删除节点或分组
 v2sub subscribe delete
 v2sub subscribe delete --all
+# 查看订阅列表
+v2sub subscribe show
 # 纯解析节点或分组，不会添加到列表中
 v2sub subscribe parse <url>
 ```
@@ -104,6 +106,8 @@ choose subscribe type:
 v2sub node start
 # 停止
 v2sub node stop
+# 重启
+v2sub node restart
 # 查看运行状态
 v2sub node status
 # 切换节点
@@ -124,6 +128,8 @@ v2sub service install
 v2sub service start
 # 停止服务
 v2sub service stop
+# 重启
+v2sub service restart
 # 查看服务运行状态
 v2sub service status
 # 切换节点

@@ -299,6 +299,26 @@ def parse_subscribe_command(url: str):
     sys.exit(0)
 
 
+@subscribe_group.command('show', help='show subscribes')
+@util.make_decorator(AppDecorator.open_subscribe_config)
+def show_subscribe_command():
+    if App.subscribe_config.is_empty():
+        print('subscribe list is empty')
+        sys.exit(0)
+
+    result, err = AppPrompt.select_subscribe_item(False)
+    if err != 0:
+        sys.exit(err)
+
+    node = App.subscribe_config.get_node(result['group'], result['name'])
+    if not node:
+        sys.exit(1)
+
+    AppPrompt.show_subscribe_node_info(result['group'], result['name'], node)
+
+    sys.exit(0)
+
+
 @subscribe_group.command('add', help='add subscribe')
 @click.argument('url', type=click.STRING)
 @util.make_decorator(AppDecorator.base_config_exists)
