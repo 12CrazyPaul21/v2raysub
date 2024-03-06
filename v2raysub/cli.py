@@ -372,7 +372,7 @@ def start_node_command():
 @node_group.command('stop', help='stop v2ray')
 @util.make_decorator(AppDecorator.v2ray_running_state, True)
 def stop_node_command():
-    sys.exit(App.stop_server(False, False))
+    sys.exit(App.stop_server(False))
 
 
 @node_group.command('restart', help='restart v2ray')

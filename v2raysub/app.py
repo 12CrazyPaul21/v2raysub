@@ -583,11 +583,14 @@ class App:
             logging.error(f'run {App.v2sub_service_name if service_mode else "v2ray"} failed: {e}')
             sys.exit(1)
 
+        if App.system in ['Windows', 'Darwin']:
+            App.check_proxy_need_enable('service' if service_mode else 'normal node')
+
         AppPrompt.show_temporarily_effect_tips(service_mode)
         return 0
 
     @staticmethod
-    def stop_server(service_mode=False, restart_mode=False) -> int:
+    def stop_server(service_mode=False) -> int:
         if service_mode:
             if service.is_running(App.v2sub_service_name):
                 service.stop_service(App.v2sub_service_name)
@@ -595,7 +598,7 @@ class App:
             if util.check_is_running(App.pid_path, 'v2ray'):
                 util.kill_daemon(App.pid_path)
 
-        if not restart_mode and App.system in ['Windows', 'Darwin']:
+        if App.system in ['Windows', 'Darwin']:
             App.check_proxy_need_disable('service' if service_mode else 'normal node')
 
         return 0
@@ -606,7 +609,7 @@ class App:
             proc_status = util.check_is_running(App.pid_path, 'v2ray')
 
             if proc_status:
-                App.stop_server(False, True)
+                App.stop_server(False)
                 time.sleep(0.5)
 
             if forced or proc_status:
@@ -629,7 +632,7 @@ class App:
                 AppPrompt.show_temporarily_effect_tips(service_mode)
             else:
                 if service_status:
-                    App.stop_server(True, True)
+                    App.stop_server(True)
                     time.sleep(0.5)
                 return App.start_server(True)
 
@@ -823,16 +826,24 @@ class App:
         if http_listen == '0.0.0.0':
             http_listen = '127.0.0.1'
 
-        proxy_server = f'{http_listen}:{node_http_config["port"]}'
-        util.enable_ie_proxy_setting(proxy_server)
+        if service_mode:
+            running_state = service.is_running(App.v2sub_service_name)
+        else:
+            running_state = util.check_is_running(App.pid_path, 'v2ray')
 
         os.system(f'echo {mode} > {os.path.join(App.app_dir, ".proxy_enabled")}')
 
-        print(f'enable proxy: {proxy_server}')
+        if running_state:
+            proxy_server = f'{http_listen}:{node_http_config["port"]}'
+            util.enable_ie_proxy_setting(proxy_server)
+            print(f'enable proxy: {proxy_server}')
+        else:
+            print('proxy setting will take effect when the server start')
+
         return 0
 
     @staticmethod
-    def _enable_mac_proxy_setting(mode: str) -> int:
+    def _enable_mac_proxy_setting(mode: str, nic=None) -> int:
         service_mode = (mode == 'service')
         node_http_config = App.load_node_config(service_mode=service_mode, only_inbound_tag='http')
         node_socks_config = App.load_node_config(service_mode=service_mode, only_inbound_tag='socks')
@@ -841,13 +852,26 @@ class App:
             logging.error(f'dont have http/socks inbound setting in {mode} config')
             return 1
 
-        nis = util.get_mac_active_network_interfaces()
-        if len(nis) == 0:
-            print('not found valid network interfaces')
-            return 0
-
-        nic = Input.select_with_cancel('choose your network interface:', nis)
         if not nic:
+            nis = util.get_mac_active_network_interfaces()
+            if len(nis) == 0:
+                print('not found valid network interfaces')
+                return 0
+
+            nic = Input.select_with_cancel('choose your network interface:', nis)
+            if not nic:
+                return 0
+
+        if service_mode:
+            running_state = service.is_running(App.v2sub_service_name)
+        else:
+            running_state = util.check_is_running(App.pid_path, 'v2ray')
+
+        os.system(f'echo {mode} > {os.path.join(App.app_dir, ".proxy_enabled")}')
+        os.system(f'echo {nic} > {os.path.join(App.app_dir, ".proxy_enabled_nic")}')
+
+        if not running_state:
+            print('proxy setting will take effect when the server start')
             return 0
 
         cmds = []
@@ -876,17 +900,15 @@ class App:
                 f'networksetup -setsocksfirewallproxystate \"{nic}\" on'
             ])
 
-        util.run_cmds(cmds)
+        if len(cmds) != 0:
+            util.run_cmds(cmds)
+            print(f'enable proxy interface: {nic}')
 
-        os.system(f'echo {mode} > {os.path.join(App.app_dir, ".proxy_enabled")}')
-        os.system(f'echo {nic} > {os.path.join(App.app_dir, ".mac_proxy_enabled_nic")}')
-
-        print(f'enable proxy interface: {nic}')
         return 0
 
     @staticmethod
     def _disable_mac_proxy_setting():
-        nic_flag = os.path.join(App.app_dir, ".mac_proxy_enabled_nic")
+        nic_flag = os.path.join(App.app_dir, ".proxy_enabled_nic")
         if not os.path.exists(nic_flag):
             return
 
@@ -899,8 +921,6 @@ class App:
             f'networksetup -setsecurewebproxystate \"{nic}\" off',
             f'networksetup -setsocksfirewallproxystate \"{nic}\" off'
         ])
-
-        os.remove(nic_flag)
 
     @staticmethod
     def enable_system_proxy_setting() -> int:
@@ -924,7 +944,30 @@ class App:
         if os.path.exists(flag):
             os.remove(flag)
 
+        nic_flag = os.path.join(App.app_dir, ".proxy_enabled_nic")
+        if os.path.exists(nic_flag):
+            os.remove(nic_flag)
+
         return 0
+
+    @staticmethod
+    def check_proxy_need_enable(mode):
+        flag = os.path.join(App.app_dir, ".proxy_enabled")
+        if not os.path.exists(flag):
+            return
+
+        enabled_mode = util.read_line(flag)
+        if enabled_mode != mode:
+            return
+
+        if App.system == 'Windows':
+            App._enable_windows_proxy_setting(enabled_mode)
+        elif App.system == 'Darwin':
+            nic_flag = os.path.join(App.app_dir, ".proxy_enabled_nic")
+            if os.path.exists(nic_flag):
+                nic = util.read_line(nic_flag, '')
+                if nic:
+                    App._enable_mac_proxy_setting(enabled_mode, nic)
 
     @staticmethod
     def check_proxy_need_disable(mode):
@@ -940,8 +983,6 @@ class App:
             util.disable_ie_proxy_setting()
         elif App.system == 'Darwin':
             App._disable_mac_proxy_setting()
-
-        os.remove(flag)
 
     @staticmethod
     def generate_proxychains_conf() -> int:
