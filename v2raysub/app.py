@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import logging
 import platform
 import json
@@ -306,6 +307,45 @@ class AppPrompt:
             print(f'  subscribe group name: {group}')
             print(f'  subscribe group url: {App.subscribe_config.get_group_url(group)}')
         print(f'  node info: {node_info}')
+
+    @staticmethod
+    def show_all_proxychains_alias(proxychains_bin):
+        if not os.path.exists(App.app_dir) or not os.path.isdir(App.app_dir):
+            return
+
+        if App.system != 'Windows':
+            try:
+                profile = util.shell_profile_path()
+            except BaseException as e:
+                logging.error(f'find shell profile failed: {e}')
+                sys.exit(1)
+
+        aliases = []
+        proxychains_dir = os.path.dirname(proxychains_bin)
+
+        for file in os.listdir(App.app_dir):
+            if not os.path.isfile(os.path.join(App.app_dir, file)):
+                continue
+            result = re.match('^alias_(.+)_proxychains.conf$', file)
+            if result:
+                if App.system == 'Windows':
+                    if os.path.exists(os.path.join(proxychains_dir, f'{result[1]}.bat')):
+                        aliases.append(result[1])
+                else:
+                    if os.system(f"cat {profile} | grep -E '^\\s*alias\\s+vproxy=.+$' > /dev/null 2>&1") == 0:
+                        aliases.append(result[1])
+
+        if len(aliases) == 0:
+            print('proxychains alias list is empty')
+            return
+
+        for alias in aliases:
+            proxy_target = util.pick_line(
+                os.path.join(App.app_dir, f'alias_{alias}_proxychains.conf'),
+                r'^\s*socks[45]\s+.*'
+            )
+            if proxy_target:
+                print(f'{alias} -> {proxy_target}')
 
 
 class App:

@@ -207,6 +207,27 @@ def read_line(file_path, default='') -> str:
     return content
 
 
+def pick_line(file_path, pattern):
+    if not os.path.exists(file_path):
+        return None
+
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+    except Exception as e:
+        lines = []
+        logging.debug(f'read file failed: {e}')
+
+    if len(lines) == 0:
+        return None
+
+    for line in lines:
+        if re.match(pattern, line):
+            return line.lstrip().rstrip()
+
+    return None
+
+
 def is_64bit_os():
     return platform.architecture()[0] == '64bit'
 

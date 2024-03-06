@@ -504,8 +504,13 @@ if platform.system() == 'Linux':
 @proxychains_group.command('alias', help='add alias for proxychains')
 @click.option('--force', is_flag=True, help='force substitution')
 @click.option('--delete', default=None, help='delete alias')
-def proxychains_alias_command(force, delete):
+@click.option('--list-all', is_flag=True, help='list all alias')
+def proxychains_alias_command(force, delete, list_all):
     proxychains_bin = util.find_bin('proxychains') or util.find_bin('proxychains4')
+
+    if list_all:
+        AppPrompt.show_all_proxychains_alias(proxychains_bin)
+        sys.exit(0)
 
     if delete:
         delete_conf = os.path.join(App.app_dir, f'alias_{delete}_proxychains.conf')

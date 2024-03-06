@@ -168,6 +168,8 @@ set https_proxy=http://127.0.0.1:<端口号>
 v2sub proxychains alias
 # 删除别名
 v2sub proxychains alias --delete <别名>
+# 显示所有别名
+v2sub proxychains alias --list-all
 ```
 
 创建别名之后，在 Windows 环境需要重启你的 powershell 或者 cmd，Linux 或 Mac 需要执行 `source <shell配置文件>` 来使别名生效。
