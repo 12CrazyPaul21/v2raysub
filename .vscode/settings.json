@@ -1,5 +1,5 @@
 {
-    "python.testing.pytestArgs": ["--log-level=info"],
+    "python.testing.pytestArgs": ["--log-level=info", "--exitfirst"],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
 }

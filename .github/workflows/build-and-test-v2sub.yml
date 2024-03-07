@@ -31,7 +31,7 @@ jobs:
               run: flake8 ./v2raysub
 
             - name: Test with pytest
-              run: pytest
+              run: pytest --exitfirst
 
             - name: Build package
               run: python -m build

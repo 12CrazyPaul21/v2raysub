@@ -10,7 +10,7 @@ TROJAN_BASE64_URL = 'trojan://MWFiMDA1YzctZjViZi0zMGQyLTJiNGMtMjQwYjNiNzIxYzVmQD
 VMESS_URL = 'vmess://ew0KICAidiI6ICIyIiwNCiAgInBzIjogIuS4reWbveiKgueCuSAyIiwNCiAgImFkZCI6ICIxMjcuMC4wLjEiLA0KICAicG9ydCI6ICI0NDMiLA0KICAiaWQiOiAiYTNiMGQ4MzAtMDZkNC00ZmE2LWEyNTktNTdjYWJiMTAyOTJmIiwNCiAgImFpZCI6ICIxMjMiLA0KICAic2N5IjogImFlcy0xMjgtZ2NtIiwNCiAgIm5ldCI6ICJ0Y3AiLA0KICAidHlwZSI6ICJodHRwIiwNCiAgImhvc3QiOiAid3d3LmZha2UuY29tIiwNCiAgInBhdGgiOiAiL0Bmb3J3YXJkdjJyYXkiLA0KICAidGxzIjogInRscyIsDQogICJzbmkiOiAidGVzdC5jb20iLA0KICAiYWxwbiI6ICJoMixodHRwLzEuMSIsDQogICJmcCI6ICJjaHJvbWUiDQp9'
 
 
-class TestProtocolParse(unittest.TestCase):    
+class TestProtocolParse(unittest.TestCase):
     @unittest.skip('custom')
     def test_parse_http(self):
         result = protocol.parse('https://<<< custom >>>')

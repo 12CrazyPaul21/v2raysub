@@ -69,6 +69,9 @@ class SubscribeConfig:
             file.write(json.dumps(self._obj, indent=2, ensure_ascii=False))
         self._is_dirty = False
 
+    def is_empty(self) -> bool:
+        return len(self._obj['anonymous']) == 0 and len(self._obj['groups']) == 0
+
     def anonymous_count(self) -> int:
         if 'anonymous' not in self._obj:
             return 0
@@ -134,7 +137,7 @@ class SubscribeConfig:
         if flush and self._is_dirty:
             self.dump()
 
-    def _parse_node(self, url):
+    def parse_node(self, url):
         result = protocol.parse(url)
         if result['success'] == 0:
             logging.error(f'invalid node: {url}, reason: {result["reason"]}')
@@ -151,6 +154,25 @@ class SubscribeConfig:
             'info': {key: value for key, value in result.items() if key != 'success'}
         }
 
+    def get_node(self, group_name, node_name) -> object:
+        if not group_name:
+            for node in self._obj['anonymous']:
+                if node['name'] == node_name:
+                    return copy.deepcopy(node)
+            return None
+
+        nodes = self._obj['groups'][group_name]['nodes']
+        for node in nodes:
+            if node['name'] == node_name:
+                return copy.deepcopy(node)
+
+        return None
+
+    def get_group_url(self, group_name) -> str:
+        if group_name not in self._obj['groups']:
+            return ''
+        return self._obj['groups'][group_name]['url']
+
     def add_group(self, name, url, param: dict, flush=True):
         if not name:
             raise ValueError('invalid subscribe name')
@@ -160,7 +182,7 @@ class SubscribeConfig:
 
         nodes = []
         for n in param['subscribe_list']:
-            node = self._parse_node(n)
+            node = self.parse_node(n)
             if node:
                 nodes.append(node)
 
@@ -183,7 +205,7 @@ class SubscribeConfig:
 
         new_nodes = []
         for n in result['subscribe_list']:
-            node = self._parse_node(n)
+            node = self.parse_node(n)
             if node:
                 new_nodes.append(node)
 
@@ -223,27 +245,14 @@ class SubscribeConfig:
             return None
         return self._obj[key]
 
-    def _get_node(self, group_name, node_name) -> object:
-        if not group_name:
-            for node in self._obj['anonymous']:
-                if node['name'] == node_name:
-                    return copy.deepcopy(node)
-            return None
-
-        nodes = self._obj['groups'][group_name]['nodes']
-        for node in nodes:
-            if node['name'] == node_name:
-                return copy.deepcopy(node)
-
-        return None
-
     def select(self, group_name, node_name, service_mode=False) -> object:
-        if not group_name:
-            group_name = ''
-
-        node = self._get_node(group_name, node_name)
-        if not node:
-            raise ValueError('node not found')
+        if group_name or node_name:
+            node = self.get_node(group_name, node_name)
+            if not node:
+                raise ValueError('node not found')
+        else:
+            # base config
+            node = None
 
         self._obj['service_mode_selected' if service_mode else 'selected'] = {
             'name': node_name,
@@ -383,63 +392,15 @@ def generate_v2ray_base_config(app_dir, config_path, log_level=None, socks_port=
     return result
 
 
-def generate_outbound_config(node) -> object:
-    config = {}
-    node_info = node['info']
-    node_options = node_info['options']
-
-    config['tag'] = 'proxy'
-    config['protocol'] = node_info['protocol']
-    config['settings'] = {}
-
-    if node_info['protocol'] == 'shadowsocks':
-        config['settings']['servers'] = [{
-            'address': node_info['server'],
-            'method': node_info['method'],
-            'ota': False,
-            'password': node_info['identify'],
-            'port': int(node_info['port'])
-        }]
-        config['streamSettings'] = {
-            "network": "tcp"
-        }
-    elif node_info['protocol'] == 'trojan':
-        config['settings']['servers'] = [{
-            'address': node_info['server'],
-            'method': 'chacha20',
-            'ota': False,
-            'password': node_info['identify'],
-            'port': int(node_info['port'])
-        }]
-        config['streamSettings'] = protocol.generate_trojan_stream_settings(node_options)
-    elif node_info['protocol'] == 'vmess':
-        config['settings']['vnext'] = [{
-            'address': node_info['server'],
-            'port': int(node_info['port']),
-            'users': [{
-                'id': node_info['identify'],
-                'alterId': int(node_options.get('aid', 0)),
-                'email': 't@t.tt',  # fake email, see v2rayN
-                'security': node_options.get('scy', 'auto')
-            }]
-        }]
-        config['streamSettings'] = protocol.generate_vmess_stream_settings(node_options)
-    else:
-        raise ValueError(f'{node_info["protocol"]} protocol unsupport')
-
-    config['mux'] = {
-        'enabled': False,
-        'concurrency': -1
-    }
-
-    return config
-
-
-def generate_node_config(node_config_path, base_config_path, outbound_config, service_mode):
+def reuse_base_config(node_config_path, base_config_path, outbound_config, service_mode):
     with open(base_config_path, 'r', encoding='utf-8') as file:
         config = json.loads(file.read())
 
-    config['outbounds'].insert(0, outbound_config)
+    if 'outbounds' not in config:
+        config['outbounds'] = []
+
+    if outbound_config:
+        config['outbounds'].insert(0, outbound_config)
 
     for inbound in config.get('inbounds', []):
         if service_mode:
@@ -458,14 +419,41 @@ def generate_node_config(node_config_path, base_config_path, outbound_config, se
             error_log = '/var/log/v2sub/v2ray_error.log'
         else:
             service_dir = os.path.dirname(node_config_path)
-            access_log = f'{service_dir}\\v2sub_service_access.log'
-            error_log = f'{service_dir}\\v2sub_service_error.log'
+            access_log = os.path.join(service_dir, 'v2sub_service_access.log')
+            error_log = os.path.join(service_dir, 'v2sub_service_error.log')
 
         config['log'] = {
             'access': access_log,
             'error': error_log,
             'loglevel': 'warning'
         }
+
+    return config
+
+
+def reuse_previous_node_config(node_config_path, outbound_config):
+    with open(node_config_path, 'r', encoding='utf-8') as file:
+        config = json.loads(file.read())
+
+    if not outbound_config:
+        return config
+
+    if 'outbounds' not in config:
+        config['outbounds'] = [outbound_config]
+        return config
+
+    outbounds = list(filter(lambda outbound: outbound['tag'] != outbound_config['tag'], config['outbounds']))
+    outbounds.insert(0, outbound_config)
+    config['outbounds'] = outbounds
+
+    return config
+
+
+def generate_node_config(node_config_path, base_config_path, outbound_config, service_mode, reuse):
+    if not reuse or not os.path.exists(node_config_path):
+        config = reuse_base_config(node_config_path, base_config_path, outbound_config, service_mode)
+    else:
+        config = reuse_previous_node_config(node_config_path, outbound_config)
 
     with open(node_config_path, 'w', encoding='utf-8') as file:
         file.write(json.dumps(config, indent=2, ensure_ascii=False))

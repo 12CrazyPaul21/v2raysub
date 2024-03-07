@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse, ParseResult
 from . import util
 
 
-def _regular_content(url: ParseResult) -> str:
+def regular_content(url: ParseResult) -> str:
     raw = url.geturl()[len(url.scheme) + 3:]
 
     if util.is_base64(raw):
@@ -41,7 +41,7 @@ def parse_shadowsocks_url(url: ParseResult) -> object:
     result = {'success': 0}
     pattern = r'^((?P<method>.*?):)?(?P<password>.+)@(?P<server>.+):(?P<port>\d+)$'
 
-    url = urlparse(f'ss://{_regular_content(url)}')
+    url = urlparse(f'ss://{regular_content(url)}')
     match = re.match(pattern, url.netloc)
     if match is None:
         result['reason'] = 'invalid shadowsocks params'
@@ -73,13 +73,6 @@ def parse_shadowsocks_url(url: ParseResult) -> object:
     return result
 
 
-def parse_shadowsocksr_url(_: ParseResult) -> object:
-    return {
-        'success': 0,
-        'reason': 'shadowsocks-R unsupported'
-    }
-
-
 def parse_trojan_url(url: ParseResult) -> object:
     """
     trojan://<password>@<server>:<port>[?options...}[#remark]
@@ -101,7 +94,7 @@ def parse_trojan_url(url: ParseResult) -> object:
     result = {'success': 0}
     pattern = r'^(?P<password>.+)@(?P<server>.+):(?P<port>\d+)$'
 
-    url = urlparse(f'trojan://{_regular_content(url)}')
+    url = urlparse(f'trojan://{regular_content(url)}')
     match = re.match(pattern, url.netloc)
     if match is None:
         result['reason'] = 'invalid trojan params'
@@ -145,7 +138,7 @@ def parse_vmess_url(url: ParseResult) -> object:
     content = None
 
     try:
-        content = json.loads(_regular_content(url))
+        content = json.loads(regular_content(url))
     except Exception as e:
         content = None
         result['reason'] = e
@@ -167,21 +160,6 @@ def parse_vmess_url(url: ParseResult) -> object:
     result['options'] = content
 
     return result
-
-
-def parse(url: str) -> object:
-    parsed_url = urlparse(url)
-    return {
-        'http': load_subscribe,
-        'https': load_subscribe,
-        'ss': parse_shadowsocks_url,
-        'ssr': parse_shadowsocksr_url,
-        'trojan': parse_trojan_url,
-        'vmess': parse_vmess_url,
-    }.get(
-        parsed_url.scheme,
-        lambda u: {'success': 0, 'reason': f'unknown scheme : {u.geturl()}'}
-    )(parsed_url)
 
 
 def generate_trojan_stream_settings(options) -> object:
@@ -365,3 +343,118 @@ def generate_vmess_stream_settings(options) -> object:
         }
 
     return settings
+
+
+def generate_shadowsocks_outbound(config, node, node_info, node_options) -> object:
+    config['settings']['servers'] = [{
+        'address': node_info['server'],
+        'method': node_info['method'],
+        'ota': False,
+        'password': node_info['identify'],
+        'port': int(node_info['port'])
+    }]
+    config['streamSettings'] = {
+        "network": "tcp"
+    }
+
+    return config
+
+
+def generate_trojan_outbound(config, node, node_info, node_options) -> object:
+    config['settings']['servers'] = [{
+        'address': node_info['server'],
+        'method': 'chacha20',
+        'ota': False,
+        'password': node_info['identify'],
+        'port': int(node_info['port'])
+    }]
+    config['streamSettings'] = generate_trojan_stream_settings(node_options)
+
+    return config
+
+
+def generate_vmess_outbound(config, node, node_info, node_options) -> object:
+    config['settings']['vnext'] = [{
+        'address': node_info['server'],
+        'port': int(node_info['port']),
+        'users': [{
+            'id': node_info['identify'],
+            'alterId': int(node_options.get('aid', 0)),
+            'email': 't@t.tt',  # fake email, see v2rayN
+            'security': node_options.get('scy', 'auto')
+        }]
+    }]
+    config['streamSettings'] = generate_vmess_stream_settings(node_options)
+
+    return config
+
+
+# <url schema>: parser
+PARSER = {
+    'http': load_subscribe,
+    'https': load_subscribe,
+    'ss': parse_shadowsocks_url,
+    'trojan': parse_trojan_url,
+    'vmess': parse_vmess_url,
+}
+
+# <protocol>: generator
+GENERATOR = {
+    'shadowsocks': generate_shadowsocks_outbound,
+    'trojan': generate_trojan_outbound,
+    'vmess': generate_vmess_outbound,
+}
+
+
+def parse(url: str) -> object:
+    global PARSER
+
+    parsed_url = urlparse(url)
+
+    try:
+        result = PARSER.get(
+            parsed_url.scheme,
+            lambda u: {'success': 0, 'reason': f'unknown scheme: {parsed_url.scheme}'}
+        )(parsed_url)
+    except Exception as e:
+        result = {
+            'success': 0,
+            'reason': str(e)
+        }
+
+    return result
+
+
+def generate_v2ray_outbound(node) -> object:
+    config = {}
+    node_info = node['info']
+    node_options = node_info['options']
+
+    config['tag'] = 'proxy'
+    config['protocol'] = node_info['protocol']
+    config['settings'] = {}
+
+    global GENERATOR
+
+    if node_info['protocol'] not in GENERATOR:
+        raise ValueError(f'{node_info["protocol"]} protocol unsupport')
+
+    config = GENERATOR[node_info['protocol']](config, node, node_info, node_options)
+
+    if 'mux' not in config:
+        config['mux'] = {
+            'enabled': False,
+            'concurrency': -1
+        }
+
+    return config
+
+
+def register_parser(scheme: str, handler):
+    global PARSER
+    PARSER[scheme] = handler
+
+
+def register_generator(proto: str, handler):
+    global GENERATOR
+    GENERATOR[proto] = handler

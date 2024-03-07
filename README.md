@@ -30,6 +30,7 @@ v2sub install proxychains
 - [x] trojan（`trojan://<password>@<server>:<port>[?options...}[#remark]` | `trojan://base64`）
 - [x] vmess（`vmess://base64`）
 - [x] http / https（订阅分组）
+- [ ] 其它协议，可以用编写 plugins 的方式，自定义解析和生成 outbound 配置
 
 ## 注意事项
 
@@ -68,6 +69,8 @@ v2sub subscribe update --all
 # 删除节点或分组
 v2sub subscribe delete
 v2sub subscribe delete --all
+# 查看订阅列表
+v2sub subscribe show
 # 纯解析节点或分组，不会添加到列表中
 v2sub subscribe parse <url>
 ```
@@ -90,9 +93,13 @@ v2sub subscribe --proxy <server:port> add <url>
 ```bash
 # anonymous内是独立节点列表，groups则是分组列表
 choose subscribe type:
- » anonymous
+ » base config
+   anonymous
    groups
    <Cancel>
+# base config 指的是直接复用默认的base_config.json里面的设置，默认没有配置带proxy tag的outbound
+# anonymous 指的是直接以类似 ss://...，这种方式添加的非分组的订阅链接
+# groups 指的是订阅分组
 ```
 
 **notes: **在服务启动之后也可以重新执行 `select` 来切换节点
@@ -104,6 +111,8 @@ choose subscribe type:
 v2sub node start
 # 停止
 v2sub node stop
+# 重启
+v2sub node restart
 # 查看运行状态
 v2sub node status
 # 切换节点
@@ -124,6 +133,8 @@ v2sub service install
 v2sub service start
 # 停止服务
 v2sub service stop
+# 重启
+v2sub service restart
 # 查看服务运行状态
 v2sub service status
 # 切换节点
@@ -162,6 +173,8 @@ set https_proxy=http://127.0.0.1:<端口号>
 v2sub proxychains alias
 # 删除别名
 v2sub proxychains alias --delete <别名>
+# 显示所有别名
+v2sub proxychains alias --list-all
 ```
 
 创建别名之后，在 Windows 环境需要重启你的 powershell 或者 cmd，Linux 或 Mac 需要执行 `source <shell配置文件>` 来使别名生效。
@@ -193,6 +206,102 @@ v2sub config proxy disable
 v2sub config lan allow
 # 禁止
 v2sub config lan disallow
+```
+
+### 7. 路由规则设置
+
+```bash
+# 可以用以下命令管理direct或block路由规则
+
+# 添加direct规则
+v2sub config direct add
+# 删除direct规则
+v2sub config direct remove
+# 查看direct规则
+v2sub config direct list
+
+# 添加block规则
+v2sub config block add
+# 删除block规则
+v2sub config block remove
+# 查看block规则
+v2sub config block list
+```
+
+## Plugin
+
+可以在 `~/.v2sub/plugins` 目录中，添加自定义的 python 脚本，v2sub 在初始化时会自动加载里面的所有脚本。这主要是为了能自定义解析一些除了 v2sub 本来不支持的其它协议，对于 ss、trojan、vmess 这些 v2sub 本来支持的协议，如果在解析或者生成配置文件有问题，也可以在扩展中将原本的解析方法给替换掉。
+
+```python
+# 扩展例子 ~/.v2sub/plugins/hh.py
+
+import re
+
+from urllib.parse import urlparse, unquote, ParseResult
+
+from v2raysub import cli as v2cli, protocol, util
+
+# 给 v2sub 添加了两个新命令
+# 可以用 v2sub foo 和 v2sub bar 来调用这两个命令
+@v2cli.cli.command("foo")
+def foo():
+    print('foo command')
+
+
+@v2cli.cli.command("bar")
+def bar():
+    print('bar command')
+
+# 解析 hh://...
+def parse_hh(url: ParseResult) -> object:
+    result = {'success': 0}
+
+    url = urlparse(f'hh://{protocol.regular_content(url)}')
+    pattern = r'^(?P<password>.+)@(?P<server>.+):(?P<port>\d+)$'
+
+    match = re.match(pattern, url.netloc)
+    if match is None:
+        result['reason'] = 'invalid hoohoo params'
+        return result
+
+    result['success'] = 1
+    result['protocol'] = 'hoohoo'
+    result['remark'] = unquote(url.fragment)
+    result['server'] = match['server']
+    result['port'] = match['port']
+    result['identify'] = match['password']
+    result['method'] = 'chacha20'
+    result['options'] = util.parse_query_string(url.query)
+
+    return result
+
+
+# 为 hoohoo 这个假的协议生成 v2ray 配置文件
+def generate_hoohoo_outbound(config, node, node_info, node_options) -> object:
+    config['settings']['servers'] = [{
+        'address': node_info['server'],
+        'method': node_info['method'],
+        'ota': False,
+        'password': node_info['identify'],
+        'port': int(node_info['port'])
+    }]
+    config['streamSettings'] = {
+        "network": "tcp"
+    }
+
+    if node_options.get('tls', '0') == '1':
+        config['streamSettings']['security'] = 'tls'
+
+    return config
+
+
+# init_plugin 会被 v2sub 自动调用
+def init_plugin(app):
+    # 注册 url 解析器
+    protocol.register_parser('hh', parse_hh)
+    # 注册配置文件生成器
+    protocol.register_generator('hoohoo', generate_hoohoo_outbound)
+
 ```
 
 
