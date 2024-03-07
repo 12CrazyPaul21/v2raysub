@@ -316,3 +316,58 @@ class TestCLI(unittest.TestCase):
         # with open(os.path.join(self.fake_app_dir, 'node_service_config.json'), 'r', encoding='utf-8') as file:
         #     obj = json.loads(file.read())
         #     self.assertEqual(obj['outbounds'][0]['protocol'], 'shadowsocks')
+
+    def test_case_9(self):
+        """ direct/block routing rule """
+
+        with create_pipe_input() as pipe_input:
+            pipe_input.send_text('j\n\ndomain:test_direct.com\n')
+            with create_app_session(input=pipe_input, output=DummyOutput()):
+                result = self.runner.invoke(v2submain.cli, ['config', 'direct', 'add'], env=self.env)
+                self.assertEqual(result.exit_code, 0)
+
+        with create_pipe_input() as pipe_input:
+            pipe_input.send_text('j\n')
+            with create_app_session(input=pipe_input, output=DummyOutput()):
+                result = self.runner.invoke(v2submain.cli, ['config', 'direct', 'list'], env=self.env)
+                self.assertEqual(result.exit_code, 0)
+                self.assertIn('domain:test_direct.com', result.output)
+
+        # with create_pipe_input() as pipe_input:
+        #     pipe_input.send_text('j\n\njjj\n')
+        #     with create_app_session(input=pipe_input, output=DummyOutput()):
+        #         result = self.runner.invoke(v2submain.cli, ['config', 'direct', 'remove'], env=self.env)
+        #         self.assertEqual(result.exit_code, 0)
+
+        # with create_pipe_input() as pipe_input:
+        #     pipe_input.send_text('j\n')
+        #     with create_app_session(input=pipe_input, output=DummyOutput()):
+        #         result = self.runner.invoke(v2submain.cli, ['config', 'direct', 'list'], env=self.env)
+        #         self.assertEqual(result.exit_code, 0)
+        #         self.assertNotIn('domain:test_direct.com', result.output)
+
+        with create_pipe_input() as pipe_input:
+            pipe_input.send_text('j\n\ndomain:test_block.com\n')
+            with create_app_session(input=pipe_input, output=DummyOutput()):
+                result = self.runner.invoke(v2submain.cli, ['config', 'block', 'add'], env=self.env)
+                self.assertEqual(result.exit_code, 0)
+
+        with create_pipe_input() as pipe_input:
+            pipe_input.send_text('j\n')
+            with create_app_session(input=pipe_input, output=DummyOutput()):
+                result = self.runner.invoke(v2submain.cli, ['config', 'block', 'list'], env=self.env)
+                self.assertEqual(result.exit_code, 0)
+                self.assertIn('domain:test_block.com', result.output)
+
+        # with create_pipe_input() as pipe_input:
+        #     pipe_input.send_text('j\n\nj\n')
+        #     with create_app_session(input=pipe_input, output=DummyOutput()):
+        #         result = self.runner.invoke(v2submain.cli, ['config', 'block', 'remove'], env=self.env)
+        #         self.assertEqual(result.exit_code, 0)
+
+        # with create_pipe_input() as pipe_input:
+        #     pipe_input.send_text('j\n')
+        #     with create_app_session(input=pipe_input, output=DummyOutput()):
+        #         result = self.runner.invoke(v2submain.cli, ['config', 'block', 'list'], env=self.env)
+        #         self.assertEqual(result.exit_code, 0)
+        #         self.assertNotIn('domain:test_block.com', result.output)

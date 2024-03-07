@@ -208,13 +208,7 @@ def edit_command():
         print('restart your v2sub resource manually after modification')
         sys.exit(retval)
 
-    try:
-        App.reflush_config(config)
-    except SystemExit:
-        raise
-    except BaseException as e:
-        logging.error(f'reflush config failed: {e}')
-        sys.exit(1)
+    App.reflush_config_safe(config, logged=False)
 
     sys.exit(0)
 
@@ -237,6 +231,58 @@ def allow_lan_command():
 @util.make_decorator(AppDecorator.base_config_exists)
 def disallow_lan_command():
     sys.exit(App.toogle_allow_lan(False))
+
+
+@config_group.command('direct', cls=util.ClickGroup)
+def direct_group():
+    """
+    manage direct routing rule
+    """
+    pass
+
+
+@direct_group.command('add', help='add rule')
+@util.make_decorator(AppDecorator.base_config_exists)
+def add_direct_rule_command():
+    sys.exit(App.add_routing_rule('direct'))
+
+
+@direct_group.command('remove', help='remove rule')
+@util.make_decorator(AppDecorator.base_config_exists)
+def remove_direct_rule_command():
+    sys.exit(App.remove_routing_rule('direct'))
+
+
+@direct_group.command('list', help='show rules')
+@util.make_decorator(AppDecorator.base_config_exists)
+def show_direct_rules_command():
+    sys.exit(AppPrompt.show_routing_rules('direct'))
+
+
+@config_group.command('block', cls=util.ClickGroup)
+def block_group():
+    """
+    manage block routing rule
+    """
+    pass
+
+
+@block_group.command('add', help='add rule')
+@util.make_decorator(AppDecorator.base_config_exists)
+def add_block_rule_command():
+    sys.exit(App.add_routing_rule('block'))
+
+
+@block_group.command('remove', help='remove rule')
+@util.make_decorator(AppDecorator.base_config_exists)
+def remove_block_rule_command():
+    sys.exit(App.remove_routing_rule('block'))
+
+
+@block_group.command('list', help='show rules')
+@util.make_decorator(AppDecorator.base_config_exists)
+def show_block_rule_command():
+    sys.exit(AppPrompt.show_routing_rules('block'))
 
 
 if platform.system() == 'Windows' or platform.system() == 'Darwin':
@@ -408,16 +454,10 @@ def select_service_node_command():
     if App.select_node(True) != 0:
         sys.exit(1)
 
-    try:
-        App.reflush_config({
-            'name': 'service',
-            'path': App.node_service_config_path
-        })
-    except SystemExit:
-        raise
-    except Exception as e:
-        logging.error(f'reflush service config failed: {e}')
-        sys.exit(1)
+    App.reflush_config_safe({
+        'name': 'service',
+        'path': App.node_service_config_path
+    }, False)
 
     sys.exit(0)
 

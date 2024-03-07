@@ -1,4 +1,4 @@
-[![PyPI - Version](https://img.shields.io/pypi/v/v2raysub)](https://pypi.org/project/v2raysub/) ![PyPI - Downloads](https://img.shields.io/pypi/dm/v2raysub) [![Build Status](https://github.com/12CrazyPaul21/v2raysub/actions/workflows/build-and-test-v2sub.yml/badge.svg)](https://github.com/12CrazyPaul21/v2raysub/actions) [![MIT/Apache-2 licensed](https://img.shields.io/crates/l/lopxy.svg)](./LICENSE)
+[![PyPI - Version](https://img.shields.io/pypi/v/v2raysub)](https://pypi.org/project/v2raysub/) [![Build Status](https://github.com/12CrazyPaul21/v2raysub/actions/workflows/build-and-test-v2sub.yml/badge.svg)](https://github.com/12CrazyPaul21/v2raysub/actions) [![MIT/Apache-2 licensed](https://img.shields.io/crates/l/lopxy.svg)](./LICENSE)
 
 # v2raysub
 
@@ -206,6 +206,28 @@ v2sub config lan allow
 # 禁止
 v2sub config lan disallow
 ```
+
+### 7. 路由规则设置
+
+```bash
+# 可以用以下命令管理direct或block路由规则
+
+# 添加direct规则
+v2sub config direct add
+# 删除direct规则
+v2sub config direct remove
+# 查看direct规则
+v2sub config direct list
+
+# 添加block规则
+v2sub config block add
+# 删除block规则
+v2sub config block remove
+# 查看block规则
+v2sub config block list
+```
+
+
 
 
 

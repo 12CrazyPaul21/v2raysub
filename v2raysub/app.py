@@ -160,7 +160,7 @@ class AppPrompt:
         return {'group': sub, 'name': name}, 0
 
     @staticmethod
-    def select_config_file():
+    def select_config_file(loaded=False):
         config_list = {
             'base config': App.base_config_path
         }
@@ -171,23 +171,31 @@ class AppPrompt:
             config_list['service'] = App.node_service_config_path
 
         if len(config_list) == 1:
-            return {
+            result = {
                 'name': 'base config',
                 'path': App.base_config_path
             }
+        else:
+            config_name = Input.select_with_cancel('choose your config: ', list(config_list.keys()))
+            if not config_name:
+                return None
 
-        config_name = Input.select_with_cancel('choose your config', list(config_list.keys()))
-        if not config_name:
-            return None
+            result = {
+                'name': config_name,
+                'path': config_list[config_name]
+            }
 
-        return {
-            'name': config_name,
-            'path': config_list[config_name]
-        }
+        if loaded:
+            if result['name'] == 'base config':
+                result['config'] = App.load_base_config()
+            else:
+                result['config'] = App.load_node_config(service_mode=(result['name'] == 'service'))
+
+        return result
 
     @staticmethod
     def select_proxy_config_type() -> str:
-        mode = Input.select_with_cancel('choose your proxy config:', ['normal node', 'service'])
+        mode = Input.select_with_cancel('choose your proxy config: ', ['normal node', 'service'])
         if not mode:
             sys.exit(0)
 
@@ -225,7 +233,7 @@ class AppPrompt:
         if len(ask_list) == 0:
             return None
 
-        selected = Input.select_with_cancel('choose your config:', [item['name'] for item in ask_list])
+        selected = Input.select_with_cancel('choose your config: ', [item['name'] for item in ask_list])
         if not selected:
             return None
 
@@ -380,6 +388,37 @@ class AppPrompt:
             if proxy_target:
                 print(f'{alias} -> {proxy_target}')
 
+    @staticmethod
+    def show_routing_rules(outbound_tag):
+        config_meta = AppPrompt.select_config_file(loaded=True)
+        if not config_meta:
+            return 1
+
+        config = config_meta['config']
+
+        domain_rules = []
+        ip_rules = []
+
+        for rule in config.get('routing', {}).get('rules', []):
+            if rule.get('outboundTag', '') != outbound_tag:
+                continue
+            for domain_rule in rule.get('domain', []):
+                domain_rules.append(domain_rule)
+            for ip_rule in rule.get('ip', []):
+                ip_rules.append(ip_rule)
+
+        if len(domain_rules) != 0:
+            print(f'{outbound_tag} domain rule:')
+            for domain_rule in domain_rules:
+                print(f'    {domain_rule}')
+
+        if len(ip_rules) != 0:
+            print(f'{outbound_tag} ip rule:')
+            for ip_rule in ip_rules:
+                print(f'    {ip_rule}')
+
+        return 0
+
 
 class App:
 
@@ -532,6 +571,18 @@ class App:
                     service_conf_dir = os.path.join(App.home_dir, f"Library/LaunchAgents/{App.v2sub_service_name}.d")
                     os.system(f'cp -f {node_config["path"]} {service_conf_dir}')
                 App.restart_server(True, False)
+
+    @staticmethod
+    def reflush_config_safe(node_config, logged=True):
+        try:
+            App.reflush_config(node_config)
+            if logged:
+                print(f'write to {node_config["path"]}')
+        except SystemExit:
+            raise
+        except BaseException as e:
+            logging.error(f'reflush config failed: {e}')
+            sys.exit(1)
 
     @staticmethod
     def add_subscribe(url: str) -> int:
@@ -892,18 +943,97 @@ class App:
             if selected['name'] == 'base config':
                 inbound['service_mode_listen'] = listen
 
-        try:
-            App.reflush_config(selected)
-            print(f'write to {selected["path"]}')
-        except SystemExit:
-            raise
-        except BaseException as e:
-            logging.error(f'reflush config failed: {e}')
-            sys.exit(1)
+        App.reflush_config_safe(selected)
 
         if allowed:
             AppPrompt.show_add_allow_lan_firewall_rule_tips(selected)
 
+        return 0
+
+    @staticmethod
+    def add_routing_rule(outbound_tag) -> int:
+        config_meta = AppPrompt.select_config_file(loaded=True)
+        if not config_meta:
+            return 1
+
+        add_type = Input.select_with_cancel('domain or ip: ', ['domain', 'ip'])
+        if not add_type:
+            return 1
+
+        add_rule = Input.ask_text(f'input your {add_type} rule:')
+        if not add_rule:
+            return 1
+
+        rule_block = None
+        config = config_meta['config']
+
+        if 'routing' not in config:
+            config['routing'] = {
+                'domainStrategy': 'AsIs'
+            }
+        if 'rules' not in config['routing']:
+            config['routing']['rules'] = []
+
+        for rule in config['routing']['rules']:
+            if rule.get('outboundTag', '') == outbound_tag and add_type in rule:
+                rule_block = rule
+                break
+
+        if rule_block:
+            if add_rule in rule_block[add_type]:
+                print(f'{outbound_tag} rule already exists: {add_rule}')
+                return 1
+            rule_block[add_type].append(add_rule)
+        else:
+            config['routing']['rules'].append({
+                'type': 'field',
+                'outboundTag': outbound_tag,
+                add_type: [
+                    add_rule
+                ]
+            })
+
+        App.reflush_config_safe(config_meta)
+
+        return 0
+
+    @staticmethod
+    def remove_routing_rule(outbound_tag) -> int:
+        config_meta = AppPrompt.select_config_file(loaded=True)
+        if not config_meta:
+            return 1
+
+        config = config_meta['config']
+
+        if len(config.get('routing', {}).get('rules', [])) == 0:
+            print(f'{outbound_tag} rule is empty')
+            return 1
+
+        remove_type = Input.select_with_cancel('domain or ip: ', ['domain', 'ip'])
+        if not remove_type:
+            return 1
+
+        rule_blocks = []
+        for rule in config['routing']['rules']:
+            if rule.get('outboundTag', '') == outbound_tag and remove_type in rule:
+                rule_blocks.append(rule)
+
+        items = []
+        for rule in rule_blocks:
+            items.extend(rule[remove_type])
+
+        if len(items) == 0:
+            print(f'{outbound_tag} {remove_type} rule is empty')
+            return 1
+
+        remove_item = Input.select_with_cancel('delete: ', list(set(items)))
+        if not remove_item:
+            return 1
+
+        for rule in rule_blocks:
+            rule[remove_type] = list(filter(lambda rule: rule != remove_item, rule[remove_type]))
+
+        App.reflush_config_safe(config_meta)
         return 0
 
     @staticmethod
@@ -951,7 +1081,7 @@ class App:
                 print('not found valid network interfaces')
                 return 0
 
-            nic = Input.select_with_cancel('choose your network interface:', nis)
+            nic = Input.select_with_cancel('choose your network interface: ', nis)
             if not nic:
                 return 0
 
