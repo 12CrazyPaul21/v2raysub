@@ -44,7 +44,7 @@ class FakeRequestHandler(http.server.SimpleHTTPRequestHandler):
 class TestCLI(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.fake_home = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'fake_home')
+        cls.fake_home = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'fake_home_cli_test')
         cls.fake_app_dir = os.path.join(cls.fake_home, '.v2sub')
         cls.runner = CliRunner()
         cls.env = {}
@@ -67,21 +67,22 @@ class TestCLI(unittest.TestCase):
         cls.server.shutdown()
         cls.server_thread.join()
         shutil.rmtree(cls.fake_home)
+        v2submain.App.inited = False
 
     def test_case_1(self):
         """ config group commands before base config init """
 
         result = self.runner.invoke(v2submain.cli, ['config', 'edit'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['config', 'lan', 'allow'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['config', 'lan', 'disallow'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         if platform.system() in ['Windows', 'Darwin']:
             with create_pipe_input() as pipe_input:
@@ -89,13 +90,13 @@ class TestCLI(unittest.TestCase):
                 with create_app_session(input=pipe_input, output=DummyOutput()):
                     result = self.runner.invoke(v2submain.cli, ['config', 'proxy', 'enable'], env=self.env)
                     self.assertEqual(result.exit_code, 1)
-                    self.assertIn('node_config.json not exists', result.output)
+                    self.assertIn('execute: v2sub node select', result.output)
             with create_pipe_input() as pipe_input:
                 pipe_input.send_text('j\n')
                 with create_app_session(input=pipe_input, output=DummyOutput()):
                     result = self.runner.invoke(v2submain.cli, ['config', 'proxy', 'enable'], env=self.env)
                     self.assertEqual(result.exit_code, 1)
-                    self.assertIn('node_service_config.json not exists', result.output)
+                    self.assertIn('execute: v2sub service select', result.output)
 
     def test_case_2(self):
         """ subscribe group commands before base config init """
@@ -114,30 +115,30 @@ class TestCLI(unittest.TestCase):
 
         result = self.runner.invoke(v2submain.cli, ['subscribe', 'add', SS_URL], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['subscribe', 'update'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['subscribe', 'update', '--all'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['subscribe', 'delete'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['subscribe', 'delete', '--all'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
     def test_case_3(self):
         """ node group commands before base config init """
 
         result = self.runner.invoke(v2submain.cli, ['node', 'select'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         result = self.runner.invoke(v2submain.cli, ['node', 'start'], env=self.env)
         self.assertEqual(result.exit_code, 1)
@@ -153,14 +154,14 @@ class TestCLI(unittest.TestCase):
 
         result = self.runner.invoke(v2submain.cli, ['node', 'status'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
     def test_case_4(self):
         """ service group commands before base config init """
 
         result = self.runner.invoke(v2submain.cli, ['service', 'select'], env=self.env)
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('base_config.json not exists', result.output)
+        self.assertIn('please execute command: v2sub init', result.output)
 
         # result = self.runner.invoke(v2submain.cli, ['service', 'install'], env=self.env)
         # self.assertEqual(result.exit_code, 1)

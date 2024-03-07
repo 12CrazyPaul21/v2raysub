@@ -389,14 +389,40 @@ def generate_vmess_outbound(config, node, node_info, node_options) -> object:
     return config
 
 
+# <url schema>: parser
+PARSER = {
+    'http': load_subscribe,
+    'https': load_subscribe,
+    'ss': parse_shadowsocks_url,
+    'trojan': parse_trojan_url,
+    'vmess': parse_vmess_url,
+}
+
+# <protocol>: generator
+GENERATOR = {
+    'shadowsocks': generate_shadowsocks_outbound,
+    'trojan': generate_trojan_outbound,
+    'vmess': generate_vmess_outbound,
+}
+
+
 def parse(url: str) -> object:
     global PARSER
 
     parsed_url = urlparse(url)
-    return PARSER.get(
-        parsed_url.scheme,
-        lambda u: {'success': 0, 'reason': f'unknown scheme : {u.geturl()}'}
-    )(parsed_url)
+
+    try:
+        result = PARSER.get(
+            parsed_url.scheme,
+            lambda u: {'success': 0, 'reason': f'unknown scheme: {parsed_url.scheme}'}
+        )(parsed_url)
+    except Exception as e:
+        result = {
+            'success': 0,
+            'reason': str(e)
+        }
+
+    return result
 
 
 def generate_v2ray_outbound(node) -> object:
@@ -424,18 +450,11 @@ def generate_v2ray_outbound(node) -> object:
     return config
 
 
-# <url schema>: parser
-PARSER = {
-    'http': load_subscribe,
-    'https': load_subscribe,
-    'ss': parse_shadowsocks_url,
-    'trojan': parse_trojan_url,
-    'vmess': parse_vmess_url,
-}
+def register_parser(scheme: str, handler):
+    global PARSER
+    PARSER[scheme] = handler
 
-# <protocol>: generator
-GENERATOR = {
-    'shadowsocks': generate_shadowsocks_outbound,
-    'trojan': generate_trojan_outbound,
-    'vmess': generate_vmess_outbound,
-}
+
+def register_generator(proto: str, handler):
+    global GENERATOR
+    GENERATOR[proto] = handler

@@ -16,6 +16,11 @@ from .util import Input
 
 class AppDecorator:
     @staticmethod
+    def app_inited():
+        if not App.inited:
+            App.init()
+
+    @staticmethod
     def base_config_exists():
         if not os.path.exists(App.base_config_path):
             logging.error(f'{App.base_config_path} not exists')
@@ -86,6 +91,16 @@ class AppDecorator:
         if state and not is_running:
             print('v2sub service is already running, please stop it first')
             sys.exit(1)
+
+
+class AppClickGroup(util.ClickGroup):
+    @util.make_decorator(AppDecorator.app_inited)
+    def __call__(self, *args, **kwargs) -> any:
+        return super(AppClickGroup, self).__call__(*args, **kwargs)
+
+    @util.make_decorator(AppDecorator.app_inited)
+    def invoke(self, ctx) -> any:
+        return super(AppClickGroup, self).invoke(ctx)
 
 
 class AppPrompt:
@@ -426,6 +441,7 @@ class App:
     home_dir = ''
     app_dir = ''
     service_dir = ''
+    plugin_dir = ''
     base_config_path = ''
     node_config_path = ''
     node_service_config_path = ''
@@ -436,6 +452,8 @@ class App:
     subscribe_list_path = ''
 
     subscribe_config: config.SubscribeConfig = None
+    plugins = []
+    inited = False
 
     @staticmethod
     def init():
@@ -443,6 +461,7 @@ class App:
         App.home_dir = os.path.expanduser('~')
         App.app_dir = os.path.join(App.home_dir, '.v2sub')
         App.service_dir = os.path.join(App.app_dir, 'service')
+        App.plugin_dir = os.path.join(App.app_dir, 'plugins')
         App.base_config_path = os.path.join(App.app_dir, 'base_config.json')
         App.node_config_path = os.path.join(App.app_dir, 'node_config.json')
         App.node_service_config_path = os.path.join(App.service_dir, 'node_service_config.json')
@@ -459,6 +478,7 @@ class App:
             App.v2sub_service_path = os.path.join(App.service_dir, 'v2sub_service.exe')
         App.subscribe_list_path = os.path.join(App.app_dir, 'subscribes.json')
         App.subscribe_config = config.SubscribeConfig()
+        App.plugins = []
 
         if App.system == 'Windows':
             v2ray_installed_path = os.path.join(App.app_dir, "v2ray")
@@ -472,6 +492,10 @@ class App:
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         logger.addHandler(console_handler)
+
+        App.load_plugins()
+
+        App.inited = True
 
     @staticmethod
     def generate_base_config() -> int:
@@ -1271,3 +1295,31 @@ END {{
 }}
 ''')
             os.system(f'awk -f {awk_script_path} /etc/proxychains.conf > {App.proxychains_conf_path}')
+
+    @staticmethod
+    def load_plugins():
+        if not os.path.exists(App.plugin_dir) or not os.path.isdir(App.plugin_dir):
+            return
+
+        for file in os.listdir(App.plugin_dir):
+            file_path = os.path.join(App.plugin_dir, file)
+            if not os.path.isfile(file_path) or not file_path.lower().endswith('.py'):
+                continue
+
+            plugin = util.dynamic_load_module(file_path, '_v2subplugin')
+            if plugin:
+                App.plugins.append({
+                    'name': plugin.__name__,
+                    'path': file_path,
+                    'module': plugin
+                })
+
+        import inspect
+
+        for plugin in App.plugins:
+            module = plugin['module']
+            if hasattr(module, 'init_plugin') and inspect.isfunction(module.init_plugin):
+                try:
+                    module.init_plugin(App)
+                except Exception as e:
+                    logging.error(f'init {module["name"].replace("_v2subplugin")} module failed: {e}')

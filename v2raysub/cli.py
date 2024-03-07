@@ -10,13 +10,16 @@ from . import util
 
 from .protocol import parse as protocol_parse
 from .util import Input
-from .app import AppDecorator, AppPrompt, App
+from .app import AppDecorator, AppClickGroup, AppPrompt, App
 
 
-@click.group(help='v2ray subscribe', cls=util.ClickGroup)
+@click.group(help='v2ray subscribe', cls=AppClickGroup)
 @click.version_option(version=v2sub_version)
 def cli():
-    App.init()
+    '''
+    v2raysub cli
+    '''
+    pass
 
 
 @cli.group('install', help='install tools', cls=util.ClickGroup)
@@ -618,6 +621,18 @@ def proxychains_alias_command(force, delete, list_all):
 
     if App.system == 'Darwin':
         print('tips: check your SIP status(csrutil status)')
+
+    sys.exit(0)
+
+
+@cli.command('plugins', help='list all plugin')
+def list_plugins_command():
+    if len(App.plugins) == 0:
+        print('plugin list is empty')
+        sys.exit(0)
+
+    for plugin in App.plugins:
+        print(f'{plugin["name"].replace("_v2subplugin", "")}: {plugin["path"]}')
 
     sys.exit(0)
 

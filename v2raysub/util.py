@@ -14,6 +14,7 @@ import platform
 import requests
 import tqdm
 import zipfile
+import importlib.util
 
 from typing import Sequence, Union, List
 from questionary import Validator, ValidationError
@@ -178,9 +179,15 @@ def is_base64(text: str) -> bool:
 
 
 def decode_base64(text: str) -> str:
-    return base64.b64decode(
-        (text + '=' * ((4 - len(text) % 4) % 4)).replace('-', '+').replace('_', '/')
-    ).decode('utf-8')
+    try:
+        result = base64.b64decode(
+            (text + '=' * ((4 - len(text) % 4) % 4)).replace('-', '+').replace('_', '/')
+        ).decode('utf-8')
+    except Exception as e:
+        result = text
+        logging.error(f'[decode_base64] maybe it\'s not a base64: {e}')
+
+    return result
 
 
 def parse_query_string(query: str) -> object:
@@ -535,3 +542,35 @@ def make_decorator(fn, *fnargs):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def dynamic_load_module(script_path: str, module_name_suffix: str):
+    if not script_path.lower().endswith('.py'):
+        return None
+
+    if not os.path.exists(script_path):
+        return None
+
+    module_name = os.path.splitext(os.path.basename(script_path))[0]
+    if not module_name.endswith(module_name_suffix):
+        module_name += module_name_suffix
+
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    module_spec = importlib.util.spec_from_file_location(
+        module_name,
+        script_path
+    )
+
+    if module_spec is None:
+        return None
+
+    try:
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+    except Exception as e:
+        module = None
+        logging.error(f'load module failed: {e}')
+
+    return module
