@@ -11,6 +11,8 @@ def regular_content(url: ParseResult) -> str:
 
     if util.is_base64(raw):
         return util.decode_base64(raw)
+    elif util.is_base64(url.netloc):
+        return '#'.join([util.decode_base64(url.netloc), url.fragment])
 
     return raw
 
@@ -35,7 +37,7 @@ def load_subscribe(url: ParseResult) -> object:
 def parse_shadowsocks_url(url: ParseResult) -> object:
     """
     ss://[method:]<password>@<server>:<port>[#remark]
-    ss://<base64 string>
+    ss://<base64 string>[#remark]
     """
 
     result = {'success': 0}
@@ -76,7 +78,7 @@ def parse_shadowsocks_url(url: ParseResult) -> object:
 def parse_trojan_url(url: ParseResult) -> object:
     """
     trojan://<password>@<server>:<port>[?options...}[#remark]
-    trojan://<base64 string>
+    trojan://<base64 string>[#remark]
 
     options:
         - security
