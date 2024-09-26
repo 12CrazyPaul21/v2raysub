@@ -22,6 +22,9 @@ from urllib.parse import parse_qs
 
 
 REQUEST_PROXIES = {}
+REQUEST_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+}
 
 
 class ClickGroup(click.Group):
@@ -107,8 +110,8 @@ def config_request_proxy(proxy_server):
 
 
 def request_get(url) -> requests.Response:
-    global REQUEST_PROXIES
-    return requests.get(url, timeout=5, proxies=REQUEST_PROXIES)
+    global REQUEST_PROXIES, REQUEST_HEADERS
+    return requests.get(url, timeout=5, proxies=REQUEST_PROXIES, headers=REQUEST_HEADERS, verify=False)
 
 
 def download(asset_url, asset_path, chunk_size=512):
