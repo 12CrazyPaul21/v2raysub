@@ -34,7 +34,7 @@ jobs:
                 echo "dist_file_name=$dist_file_name" >> "$GITHUB_OUTPUT"
 
             - name: Download Build Artifact
-              uses: actions/download-artifact@v2
+              uses: actions/download-artifact@v4
               with:
                 name: v2sub-build-dist
                 path: dist

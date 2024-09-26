@@ -37,7 +37,7 @@ jobs:
               run: python -m build
 
             - name: Upload Build Artifact
-              uses: actions/upload-artifact@v2
+              uses: actions/upload-artifact@v4
               with:
                 name: v2sub-build-dist
                 path: dist
